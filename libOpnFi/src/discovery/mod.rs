@@ -7,7 +7,7 @@ use std::{
 
 use crate::error::OpnFiError;
 use crate::tlv::{ReadTlvExt, Tlv, WriteTlvExt};
-use crate::{OpnFiReadExt, OpnFiWriteExt, Result};
+use crate::Result;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use mac_address::MacAddress;
 
@@ -264,6 +264,20 @@ impl fmt::Display for OpnFiDiscoveryPacket {
 }
 
 // ===== Discovery Read/Write =====
+
+pub trait OpnFiReadExt<R: io::Read + ?Sized> {
+    fn read<B>(rdr: &mut R) -> io::Result<Self>
+    where
+        Self: Sized,
+        B: ByteOrder;
+}
+
+pub trait OpnFiWriteExt<W: io::Write + ?Sized> {
+    fn write<B>(&self, wtr: &mut W) -> io::Result<()>
+    where
+        Self: Sized,
+        B: ByteOrder;
+}
 
 impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryValue {
     fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
