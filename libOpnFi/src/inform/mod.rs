@@ -13,6 +13,7 @@ use mac_address::MacAddress;
 
 mod cipher;
 mod compression;
+pub mod payload;
 
 // ===== Constants =====
 
