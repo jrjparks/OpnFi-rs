@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::error::OpnFiError;
-use crate::tlv::{ReadTlvExt, Tlv, WriteTlvExt};
+use crate::tlv::{Tlv, TlvReadExt, TlvWriteExt};
 use crate::Result;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use mac_address::MacAddress;
@@ -281,7 +281,7 @@ pub trait OpnFiWriteExt<W: io::Write + ?Sized> {
 
 impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryValue {
     fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
-        let tlv = rdr.read_tlv::<B>()?;
+        let tlv = Tlv::read::<B>(rdr)?;
         Ok(OpnFiDiscoveryValue::new::<B>(tlv.tag, tlv.value))
     }
 }
@@ -338,14 +338,14 @@ impl<W: io::Write + ?Sized> OpnFiWriteExt<W> for OpnFiDiscoveryValue {
             }
             OpnFiDiscoveryValue::Bool { tag, value } => Tlv::new(tag, vec![value as u8]),
         }?;
-        wtr.write_tlv::<B>(&tlv)
+        tlv.write::<B>(wtr)
     }
 }
 
 impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryPacket {
     fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
         let version = rdr.read_u8()?;
-        let tlv = rdr.read_tlv::<B>()?;
+        let tlv = Tlv::read::<B>(rdr)?;
         let mut values = Vec::new();
         let mut value_rdr = io::Cursor::new(tlv.value);
         loop {
@@ -370,7 +370,7 @@ impl<W: io::Write + ?Sized> OpnFiWriteExt<W> for OpnFiDiscoveryPacket {
             value.write::<B>(&mut values)?;
         }
         let tlv = Tlv::new(u8::from(self.command), values)?;
-        wtr.write_tlv::<B>(&tlv)
+        tlv.write::<B>(wtr)
     }
 }
 
@@ -379,7 +379,6 @@ impl<W: io::Write + ?Sized> OpnFiWriteExt<W> for OpnFiDiscoveryPacket {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tlv::ReadTlvExt;
     use byteorder::BigEndian;
     use std::{error, io::Cursor};
 

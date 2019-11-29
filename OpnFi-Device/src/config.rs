@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
-use std::io;
-use std::io::{Read, Write};
-use std::path;
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path,
+};
 use toml;
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
@@ -59,12 +60,11 @@ impl Config {
         cfg
     }
 
-    pub fn load(path: &String) -> io::Result<Self> {
-        let path = path::Path::new(&path);
+    pub fn load(path: &path::Path) -> io::Result<Self> {
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let mut file = OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .write(false)
             .read(true)
             .create(false)
@@ -74,12 +74,11 @@ impl Config {
         toml::from_slice(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
     }
 
-    pub fn save(&self, path: &String) -> io::Result<()> {
-        let path = path::Path::new(&path);
+    pub fn save(&self, path: &path::Path) -> io::Result<()> {
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let mut file = OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .write(true)
             .read(false)
             .create(true)

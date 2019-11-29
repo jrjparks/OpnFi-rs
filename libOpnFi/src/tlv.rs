@@ -87,25 +87,39 @@ impl Default for Tlv {
     }
 }
 
-pub trait ReadTlvExt: io::Read {
-    fn read_tlv<T: ByteOrder>(&mut self) -> io::Result<Tlv> {
-        let tag = self.read_u8()?;
-        let length = self.read_u16::<T>()?;
-        let mut value = Vec::with_capacity(length as usize);
-        self.take(length as u64).read_to_end(&mut value)?;
-        Ok(Tlv::new(tag, value)?)
-    }
-}
-impl<R: io::Read + ?Sized> ReadTlvExt for R {}
+// ===== Inform Read/Write =====
 
-pub trait WriteTlvExt: io::Write {
-    fn write_tlv<T: ByteOrder>(&mut self, tlv: &Tlv) -> io::Result<()> {
-        self.write_u8(tlv.tag)?;
-        self.write_u16::<T>(tlv.len())?;
-        self.write_all(tlv.value.as_slice())
+pub trait TlvReadExt<R: io::Read + ?Sized> {
+    fn read<B>(rdr: &mut R) -> io::Result<Self>
+    where
+        Self: Sized,
+        B: ByteOrder;
+}
+
+pub trait TlvWriteExt<W: io::Write + ?Sized> {
+    fn write<B>(&self, wtr: &mut W) -> io::Result<()>
+    where
+        Self: Sized,
+        B: ByteOrder;
+}
+
+impl<R: io::Read + ?Sized> TlvReadExt<R> for Tlv {
+    fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
+        let tag = rdr.read_u8()?;
+        let length = rdr.read_u16::<B>()?;
+        let mut value = Vec::with_capacity(length as usize);
+        rdr.take(length as u64).read_to_end(&mut value)?;
+        Tlv::new(tag, value).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
     }
 }
-impl<W: io::Write + ?Sized> WriteTlvExt for W {}
+
+impl<W: io::Write + ?Sized> TlvWriteExt<W> for Tlv {
+    fn write<B: ByteOrder>(&self, wtr: &mut W) -> io::Result<()> {
+        wtr.write_u8(self.tag)?;
+        wtr.write_u16::<B>(self.len())?;
+        wtr.write_all(&self.value)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -120,7 +134,7 @@ mod tests {
         let mut rdr = Cursor::new(vec![
             4, 0, 11, 72, 101, 108, 108, 111, 32, 82, 117, 115, 116, 33,
         ]);
-        let tlv = rdr.read_tlv::<BigEndian>()?;
+        let tlv = Tlv::read::<BigEndian>(&mut rdr)?;
         assert_eq!(tlv.tag, 4);
         assert_eq!(String::from_utf8(tlv.value)?, "Hello Rust!");
         Ok(())
@@ -129,10 +143,10 @@ mod tests {
     #[test]
     fn test_tlv_write() -> Result {
         let expected = vec![4, 0, 11, 72, 101, 108, 108, 111, 32, 82, 117, 115, 116, 33];
-        let mut wtr = Cursor::new(Vec::new());
+        let mut wtr = Vec::new();
         let tlv = Tlv::new(4, String::from("Hello Rust!").into_bytes())?;
-        wtr.write_tlv::<BigEndian>(&tlv)?;
-        assert_eq!(expected, wtr.into_inner());
+        tlv.write::<BigEndian>(&mut wtr)?;
+        assert_eq!(expected, wtr);
         Ok(())
     }
 }

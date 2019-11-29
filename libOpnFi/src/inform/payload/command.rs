@@ -16,8 +16,8 @@ pub enum OpnFiInformPayloadCommand {
     SetParam(OpnFiInformPayloadSetParamsCommand),
     Upgrade,
     Reboot,
-    Cmd,
-    SetDefault,
+    Cmd(OpnFiInformPayloadCmdCommand),
+    SetDefault(OpnFiInformPayloadSetDefaultCommand),
 }
 
 // ===== NoOp =====
@@ -25,14 +25,14 @@ pub enum OpnFiInformPayloadCommand {
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OpnFiInformPayloadNoOpCommand {
     interval: u64,
-    server_time_in_utc: Option<String>,
+    server_time_in_utc: String,
 }
 
 impl Default for OpnFiInformPayloadNoOpCommand {
     fn default() -> Self {
         OpnFiInformPayloadNoOpCommand {
             interval: 10,
-            server_time_in_utc: Some(time().to_string()),
+            server_time_in_utc: time().to_string(),
         }
     }
 }
@@ -49,5 +49,59 @@ impl OpnFiInformPayloadNoOpCommand {
 pub struct OpnFiInformPayloadSetParamsCommand {
     pub mgmt_cfg: Option<String>,
     pub system_cfg: Option<String>,
-    server_time_in_utc: Option<String>,
+    pub blocked_sta: Option<String>,
+    server_time_in_utc: String,
+}
+
+impl OpnFiInformPayloadSetParamsCommand {
+    pub fn is_mgmt_cfg(&self) -> bool {
+        self.mgmt_cfg.is_some()
+    }
+
+    pub fn is_system_cfg(&self) -> bool {
+        self.system_cfg.is_some()
+    }
+}
+
+// ===== CMD =====
+
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct OpnFiInformPayloadCmdCommand {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub cmd: String,
+    pub date_time: String,
+    pub device_id: String,
+    server_time_in_utc: String,
+    pub time: u64,
+    pub use_alert: bool,
+}
+
+impl Default for OpnFiInformPayloadCmdCommand {
+    fn default() -> Self {
+        OpnFiInformPayloadCmdCommand {
+            id: "".to_string(),
+            cmd: "".to_string(),
+            date_time: "".to_string(),
+            device_id: "".to_string(),
+            server_time_in_utc: time().to_string(),
+            time: time(),
+            use_alert: true,
+        }
+    }
+}
+
+// ===== SetDefault =====
+
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct OpnFiInformPayloadSetDefaultCommand {
+    server_time_in_utc: String,
+}
+
+impl Default for OpnFiInformPayloadSetDefaultCommand {
+    fn default() -> Self {
+        OpnFiInformPayloadSetDefaultCommand {
+            server_time_in_utc: time().to_string(),
+        }
+    }
 }
