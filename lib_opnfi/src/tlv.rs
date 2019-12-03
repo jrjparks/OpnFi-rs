@@ -1,6 +1,6 @@
 use std::{
     error, fmt,
-    io::{self, Read, Write},
+    io::{self, Read},
     num,
 };
 
@@ -103,6 +103,7 @@ pub trait TlvWriteExt<W: io::Write + ?Sized> {
         B: ByteOrder;
 }
 
+/// Read a single TLV struct from bytes
 impl<R: io::Read + ?Sized> TlvReadExt<R> for Tlv {
     fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
         let tag = rdr.read_u8()?;
@@ -113,6 +114,7 @@ impl<R: io::Read + ?Sized> TlvReadExt<R> for Tlv {
     }
 }
 
+/// Write a single TLV struct from bytes
 impl<W: io::Write + ?Sized> TlvWriteExt<W> for Tlv {
     fn write<B: ByteOrder>(&self, wtr: &mut W) -> io::Result<()> {
         wtr.write_u8(self.tag)?;

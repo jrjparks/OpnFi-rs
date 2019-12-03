@@ -1,8 +1,10 @@
 [package]
-name = "libOpnFi"
-version = "0.1.0"
+name = "lib_opnfi"
+version = "0.0.1"
 authors = ["James Parks <jrjparks@zathera.com>"]
 edition = "2018"
+license = "Apache-2.0"
+license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,5 +18,5 @@ serde = "1.0.102"
 serde_derive = "1.0.102"
 serde_json = "1.0.41"
 openssl = "0.10.26"
-mac_address = "1.0.2"
+pnet = "0.23.0"
 enumflags2 = "0.6.2"

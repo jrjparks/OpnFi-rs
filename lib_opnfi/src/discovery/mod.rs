@@ -1,15 +1,13 @@
 use std::{
     fmt,
-    io::{self, Read, Write},
+    io::{self, Write},
     mem,
     net::Ipv4Addr,
 };
 
-use crate::error::OpnFiError;
 use crate::tlv::{Tlv, TlvReadExt, TlvWriteExt};
-use crate::Result;
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
-use mac_address::MacAddress;
+use pnet::util::MacAddr;
 
 // ===== Discovery Command =====
 
@@ -78,9 +76,9 @@ impl From<u8> for OpnFiDiscoveryCommand {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum OpnFiDiscoveryValue {
-    HardwareAddress(MacAddress),  // 0x01 (1)
-    IpInfo(Ipv4Addr, MacAddress), // 0x02 (2)
-    FirmwareVersion(String),      // 0x03 (3)
+    HardwareAddress(MacAddr),  // 0x01 (1)
+    IpInfo(Ipv4Addr, MacAddr), // 0x02 (2)
+    FirmwareVersion(String),   // 0x03 (3)
     // 0x04 (4) - N/A
     // 0x05 (5) - N/A
     Username(String),   // 0x06 (6)
@@ -121,7 +119,7 @@ impl OpnFiDiscoveryValue {
             0x01 => {
                 let mut bytes = [0u8; 6];
                 bytes.copy_from_slice(value.as_slice());
-                OpnFiDiscoveryValue::HardwareAddress(MacAddress::new(bytes))
+                OpnFiDiscoveryValue::HardwareAddress(crate::util::bytes_to_mac(&bytes))
             }
             0x02 => {
                 let mut ip_bytes = [0u8; 4];
@@ -129,7 +127,10 @@ impl OpnFiDiscoveryValue {
                 let (i, m) = value.split_at(6);
                 ip_bytes.copy_from_slice(i);
                 mac_bytes.copy_from_slice(m);
-                OpnFiDiscoveryValue::IpInfo(Ipv4Addr::from(ip_bytes), MacAddress::new(mac_bytes))
+                OpnFiDiscoveryValue::IpInfo(
+                    Ipv4Addr::from(ip_bytes),
+                    crate::util::bytes_to_mac(&mac_bytes),
+                )
             }
             0x03 => OpnFiDiscoveryValue::FirmwareVersion(utf8(value)),
 
@@ -279,6 +280,7 @@ pub trait OpnFiWriteExt<W: io::Write + ?Sized> {
         B: ByteOrder;
 }
 
+/// Read an OpnFiDiscoveryValue from bytes
 impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryValue {
     fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
         let tlv = Tlv::read::<B>(rdr)?;
@@ -286,13 +288,16 @@ impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryValue {
     }
 }
 
+/// Write an OpnFiDiscoveryValue from bytes
 impl<W: io::Write + ?Sized> OpnFiWriteExt<W> for OpnFiDiscoveryValue {
     fn write<B: ByteOrder>(&self, wtr: &mut W) -> io::Result<()> {
         let tlv = match self.clone() {
-            OpnFiDiscoveryValue::HardwareAddress(m) => Tlv::new(0x01, m.bytes().to_vec()),
+            OpnFiDiscoveryValue::HardwareAddress(m) => {
+                Tlv::new(0x01, crate::util::mac_to_bytes(&m).to_vec())
+            }
             OpnFiDiscoveryValue::IpInfo(i, m) => {
                 let mut buf: Vec<u8> = Vec::with_capacity(10);
-                buf.write(m.bytes().as_ref())?;
+                buf.write(crate::util::mac_to_bytes(&m).as_ref())?;
                 buf.write(i.octets().as_ref())?;
                 Tlv::new(0x02, buf)
             }
@@ -342,6 +347,7 @@ impl<W: io::Write + ?Sized> OpnFiWriteExt<W> for OpnFiDiscoveryValue {
     }
 }
 
+/// Read an OpnFiDiscoveryPacket from bytes
 impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryPacket {
     fn read<B: ByteOrder>(rdr: &mut R) -> io::Result<Self> {
         let version = rdr.read_u8()?;
@@ -362,6 +368,7 @@ impl<R: io::Read + ?Sized> OpnFiReadExt<R> for OpnFiDiscoveryPacket {
     }
 }
 
+/// Write an OpnFiDiscoveryPacket from bytes
 impl<W: io::Write + ?Sized> OpnFiWriteExt<W> for OpnFiDiscoveryPacket {
     fn write<B: ByteOrder>(&self, wtr: &mut W) -> io::Result<()> {
         wtr.write_u8(self.version)?;

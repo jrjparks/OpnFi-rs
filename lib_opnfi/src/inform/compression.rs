@@ -1,4 +1,3 @@
-use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use flate2::{
     read::{ZlibDecoder, ZlibEncoder},
     Compression,
@@ -9,6 +8,7 @@ use std::io::prelude::*;
 
 // ===== ZLib =====
 
+/// Decode from ZLib compressed payload
 pub(crate) fn decode_zlib(data: &[u8]) -> io::Result<Vec<u8>> {
     let mut rdr = ZlibDecoder::new(data);
     let mut data = Vec::new();
@@ -16,6 +16,7 @@ pub(crate) fn decode_zlib(data: &[u8]) -> io::Result<Vec<u8>> {
     Ok(data)
 }
 
+/// Encode to ZLib compressed payload
 pub(crate) fn encode_zlib(data: &[u8]) -> io::Result<Vec<u8>> {
     let mut rdr = ZlibEncoder::new(data, Compression::best());
     let mut data = Vec::new();
@@ -25,6 +26,7 @@ pub(crate) fn encode_zlib(data: &[u8]) -> io::Result<Vec<u8>> {
 
 // ===== Snappy =====
 
+/// Decode from a Snappy compressed payload
 pub(crate) fn decode_snappy(data: &[u8]) -> io::Result<Vec<u8>> {
     let mut rdr = snap::Reader::new(data);
     let mut data = Vec::new();
@@ -32,6 +34,7 @@ pub(crate) fn decode_snappy(data: &[u8]) -> io::Result<Vec<u8>> {
     Ok(data)
 }
 
+/// Encode to a Snappy compressed payload
 pub(crate) fn encode_snappy(data: &[u8]) -> io::Result<Vec<u8>> {
     let mut wtr = snap::Writer::new(Vec::new());
     wtr.write_all(data)?;

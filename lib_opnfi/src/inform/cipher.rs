@@ -1,4 +1,3 @@
-use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use openssl::symm::{decrypt, decrypt_aead, encrypt, encrypt_aead, Cipher};
 use std::io;
 use std::io::prelude::*;
@@ -7,6 +6,7 @@ const TAG_SIZE: usize = 16;
 
 // ===== AES-GCM =====
 
+/// Decode a GCM payload with the given key, iv, and aad
 pub(crate) fn decode_gcm(
     data: &[u8],
     key: &[u8],
@@ -18,6 +18,7 @@ pub(crate) fn decode_gcm(
     Ok(plain_data)
 }
 
+/// Encode a GCM payload with the given key, iv, and aad
 pub(crate) fn encode_gcm(
     data: &[u8],
     key: &[u8],
@@ -32,11 +33,13 @@ pub(crate) fn encode_gcm(
 
 // ===== AES-CBC =====
 
+/// Decode a CBC payload with the given key, and iv
 pub(crate) fn decode_cbc(data: &[u8], key: &[u8], iv: Option<&[u8]>) -> io::Result<Vec<u8>> {
     let plain_data = decrypt(Cipher::aes_128_cbc(), key, iv, data)?;
     Ok(plain_data)
 }
 
+/// Encode a CBC payload with the given key, and iv
 pub(crate) fn encode_cbc(data: &[u8], key: &[u8], iv: Option<&[u8]>) -> io::Result<Vec<u8>> {
     let cipher_data = encrypt(Cipher::aes_128_cbc(), key, iv, data)?;
     Ok(cipher_data)

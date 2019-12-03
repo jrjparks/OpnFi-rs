@@ -1,11 +1,15 @@
-use mac_address::MacAddress;
+use pnet::{
+    datalink::{interfaces, NetworkInterface},
+    util::MacAddr,
+};
 use std::str::FromStr;
 use std::{fs, io, path};
 
 #[derive(PartialEq, Clone, Debug)]
 pub(crate) struct UnixNetworkDevice {
     name: String,
-    mac: MacAddress,
+    mac: MacAddr,
+    interface: NetworkInterface,
     statistics: UnixNetworkDeviceStatistics,
 }
 
@@ -26,14 +30,24 @@ impl UnixNetworkDevice {
                 "Mac address is empty.",
             ));
         }
-        let mac = MacAddress::from_str(mac_string.trim())
+        let mac = MacAddr::from_str(mac_string.trim())
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        let interface = interfaces().into_iter().filter(|i| i.name == *name).next();
+        if interface.is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Unable to locate NetworkInterface {}", name),
+            ));
+        }
+        let interface = interface.unwrap();
 
         let statistics = UnixNetworkDeviceStatistics::new(name);
 
         Ok(UnixNetworkDevice {
             name: name.clone(),
             mac,
+            interface,
             statistics,
         })
     }
@@ -55,36 +69,52 @@ impl UnixNetworkDevice {
             .collect();
         Ok(device_names)
     }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn mac(&self) -> MacAddr {
+        self.mac
+    }
+
+    pub fn interface(&self) -> NetworkInterface {
+        self.interface.clone()
+    }
+
+    pub fn statistics(&self) -> UnixNetworkDeviceStatistics {
+        self.statistics.clone()
+    }
 }
 
 // ===== Statistics =====
 
 #[derive(PartialOrd, PartialEq, Clone, Debug)]
 pub(crate) struct UnixNetworkDeviceStatistics {
-    collisions: usize,
-    multicast: usize,
-    rx_bytes: usize,
-    rx_compressed: usize,
-    rx_crc_errors: usize,
-    rx_dropped: usize,
-    rx_errors: usize,
-    rx_fifo_errors: usize,
-    rx_frame_errors: usize,
-    rx_length_errors: usize,
-    rx_missed_errors: usize,
-    rx_nohandler: usize,
-    rx_over_errors: usize,
-    rx_packets: usize,
-    tx_aborted_errors: usize,
-    tx_bytes: usize,
-    tx_carrier_errors: usize,
-    tx_compressed: usize,
-    tx_dropped: usize,
-    tx_errors: usize,
-    tx_fifo_errors: usize,
-    tx_heartbeat_errors: usize,
-    tx_packets: usize,
-    tx_window_errors: usize,
+    pub collisions: usize,
+    pub multicast: usize,
+    pub rx_bytes: usize,
+    pub rx_compressed: usize,
+    pub rx_crc_errors: usize,
+    pub rx_dropped: usize,
+    pub rx_errors: usize,
+    pub rx_fifo_errors: usize,
+    pub rx_frame_errors: usize,
+    pub rx_length_errors: usize,
+    pub rx_missed_errors: usize,
+    pub rx_nohandler: usize,
+    pub rx_over_errors: usize,
+    pub rx_packets: usize,
+    pub tx_aborted_errors: usize,
+    pub tx_bytes: usize,
+    pub tx_carrier_errors: usize,
+    pub tx_compressed: usize,
+    pub tx_dropped: usize,
+    pub tx_errors: usize,
+    pub tx_fifo_errors: usize,
+    pub tx_heartbeat_errors: usize,
+    pub tx_packets: usize,
+    pub tx_window_errors: usize,
 }
 
 impl UnixNetworkDeviceStatistics {

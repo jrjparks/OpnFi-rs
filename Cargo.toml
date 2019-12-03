@@ -1,6 +1,6 @@
 [workspace]
 
 members = [
-    "libOpnFi",
-    "OpnFi-Device"
+    "lib_opnfi",
+    "opnfi_device"
 ]

@@ -8,6 +8,7 @@ use toml;
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub(crate) struct Config {
+    pub inform_url: String,
     pub capability: Vec<String>,
     pub cfgversion: String,
     pub selfrun_guest_mode: String,
@@ -22,6 +23,7 @@ pub(crate) struct Config {
 impl Config {
     pub fn new() -> Self {
         Config {
+            inform_url: String::new(),
             capability: Vec::new(),
             cfgversion: String::new(),
             selfrun_guest_mode: String::new(),

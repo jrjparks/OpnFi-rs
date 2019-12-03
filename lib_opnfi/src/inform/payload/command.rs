@@ -9,19 +9,21 @@ fn time() -> u64 {
     epoch.as_secs()
 }
 
+/// The different inform commands
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 #[serde(tag = "_type", rename_all = "lowercase")]
 pub enum OpnFiInformPayloadCommand {
     NoOp(OpnFiInformPayloadNoOpCommand),
     SetParam(OpnFiInformPayloadSetParamsCommand),
-    Upgrade,
-    Reboot,
+    Upgrade(OpnFiInformPayloadUpgradeCommand),
+    Reboot(OpnFiInformPayloadRebootCommand),
     Cmd(OpnFiInformPayloadCmdCommand),
     SetDefault(OpnFiInformPayloadSetDefaultCommand),
 }
 
 // ===== NoOp =====
 
+/// NoOp command with next inform interval
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OpnFiInformPayloadNoOpCommand {
     interval: u64,
@@ -43,8 +45,10 @@ impl OpnFiInformPayloadNoOpCommand {
     }
 }
 
-// ===== NoOp =====
+// ===== SetParam =====
 
+/// SetParams command to update configs.
+/// Not sure what blocked_sta is, I only ever see it as an empty string.
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OpnFiInformPayloadSetParamsCommand {
     pub mgmt_cfg: Option<String>,
@@ -63,8 +67,70 @@ impl OpnFiInformPayloadSetParamsCommand {
     }
 }
 
+impl Default for OpnFiInformPayloadSetParamsCommand {
+    fn default() -> Self {
+        Self {
+            mgmt_cfg: None,
+            system_cfg: None,
+            blocked_sta: None,
+            server_time_in_utc: time().to_string(),
+        }
+    }
+}
+
+// ===== Upgrade =====
+
+/// Command to upgrade firmware or software
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct OpnFiInformPayloadUpgradeCommand {
+    md5sum: String,
+    url: String,
+    version: String,
+    server_time_in_utc: String,
+}
+
+impl Default for OpnFiInformPayloadUpgradeCommand {
+    fn default() -> Self {
+        Self {
+            md5sum: "".to_string(),
+            url: "".to_string(),
+            version: "".to_string(),
+            server_time_in_utc: time().to_string(),
+        }
+    }
+}
+
+// ===== Reboot =====
+
+/// Reboot device command
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct OpnFiInformPayloadRebootCommand {
+    #[serde(rename = "_id")]
+    id: String,
+    datetime: String,
+    device_id: String,
+    reboot_type: String,
+    server_time_in_utc: String,
+    time: u64,
+}
+
+impl Default for OpnFiInformPayloadRebootCommand {
+    fn default() -> Self {
+        let time = time();
+        Self {
+            id: "".to_string(),
+            datetime: "".to_string(),
+            device_id: "".to_string(),
+            reboot_type: "soft".to_string(),
+            server_time_in_utc: time.to_string(),
+            time,
+        }
+    }
+}
+
 // ===== CMD =====
 
+/// Generic command
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OpnFiInformPayloadCmdCommand {
     #[serde(rename = "_id")]
@@ -79,7 +145,7 @@ pub struct OpnFiInformPayloadCmdCommand {
 
 impl Default for OpnFiInformPayloadCmdCommand {
     fn default() -> Self {
-        OpnFiInformPayloadCmdCommand {
+        Self {
             id: "".to_string(),
             cmd: "".to_string(),
             date_time: "".to_string(),
@@ -93,6 +159,7 @@ impl Default for OpnFiInformPayloadCmdCommand {
 
 // ===== SetDefault =====
 
+/// Device was forgotten, reset to defaults
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OpnFiInformPayloadSetDefaultCommand {
     server_time_in_utc: String,
@@ -100,7 +167,7 @@ pub struct OpnFiInformPayloadSetDefaultCommand {
 
 impl Default for OpnFiInformPayloadSetDefaultCommand {
     fn default() -> Self {
-        OpnFiInformPayloadSetDefaultCommand {
+        Self {
             server_time_in_utc: time().to_string(),
         }
     }

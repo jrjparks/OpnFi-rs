@@ -3,15 +3,17 @@ extern crate log;
 extern crate simple_logger;
 
 extern crate clap;
-extern crate libOpnFi;
+extern crate lib_opnfi;
 use crate::config::Config;
-use libOpnFi::inform::payload::inform::{
-    OpnFiInformGatewayPayload, OpnFiInformNetworkConfig, OpnFiInformSystemStatus,
+use crate::util::*;
+use lib_opnfi::inform::payload::gateway::OpnFiInformGatewayPayload;
+use lib_opnfi::inform::payload::net::{
+    OpnFiInformConfigPortTableItem, OpnFiInformNetworkConfig, OpnFiInformNetworkInterface,
 };
-use libOpnFi::inform::payload::{command::OpnFiInformPayloadCommand, OpnFiInformPayload};
-use libOpnFi::inform::{OpnFiReadExt, OpnFiWriteExt, OpnfiInformPacket, OpnfiInformPacketFlag};
+use lib_opnfi::inform::payload::stats::OpnFiInformSystemStatus;
+use lib_opnfi::inform::payload::{command::OpnFiInformPayloadCommand, OpnFiInformPayload};
+use lib_opnfi::inform::{OpnFiReadExt, OpnFiWriteExt, OpnfiInformPacket, OpnfiInformPacketFlag};
 use rand::prelude::*;
-use std::str::FromStr;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -21,24 +23,13 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-use sysinfo::{NetworkExt, ProcessorExt, SystemExt};
+use sysinfo::{ProcessorExt, SystemExt};
 
 mod config;
 mod net;
+mod util;
 
 type Result = std::result::Result<(), Box<dyn error::Error + 'static>>;
-
-struct SimpleInformPayload {}
-
-fn copy_to_array<A, T>(slice: &[T]) -> A
-where
-    A: Sized + Default + AsMut<[T]>,
-    T: Clone,
-{
-    let mut a = Default::default();
-    <A as AsMut<[T]>>::as_mut(&mut a).clone_from_slice(slice);
-    a
-}
 
 fn main() -> Result {
     if simple_logger::init_with_level(log::Level::Info).is_err() {
@@ -62,8 +53,7 @@ fn main() -> Result {
                 .long("controller")
                 .value_name("FILE")
                 .help("Sets a config file path to use")
-                .takes_value(true)
-                .default_value("unifi"),
+                .takes_value(true),
         )
         .get_matches();
 
@@ -77,9 +67,14 @@ fn main() -> Result {
         info!("Unable to locate existing config, entering adoption mode.");
     }
 
-    let inform_host = matches.value_of("controller").unwrap_or("unifi");
-    info!("Reporting inform packets to {}", inform_host);
-    let inform_url = format!("http://{}:8080/inform", inform_host);
+    let inform_url = match matches.value_of("controller") {
+        Some(host) => format!("http://{}:8080/inform", host),
+        None => match &config {
+            Some(config) => config.inform_url.clone(),
+            None => String::from("http://unifi:8080/inform"),
+        },
+    };
+    info!("Reporting inform packets to {}", inform_url);
 
     let mut net_devices = net::device::UnixNetworkDevice::list_devices()?;
 
@@ -142,6 +137,13 @@ fn main() -> Result {
             let mut initialization_vector = [0u8; 16];
             rng.fill_bytes(&mut initialization_vector);
 
+            // Interfaces
+            let wan = net::device::UnixNetworkDevice::new(&String::from("wlp3s0"))?;
+            let wan_interface: OpnFiInformNetworkInterface = wan.clone().into();
+
+            let lan = net::device::UnixNetworkDevice::new(&String::from("virbr1"))?;
+            let lan_interface: OpnFiInformNetworkInterface = lan.clone().into();
+
             // Payload
             let payload = OpnFiInformPayload::Gateway(OpnFiInformGatewayPayload {
                 bootrom_version: "pfsense".to_string(),
@@ -151,28 +153,26 @@ fn main() -> Result {
                 },
                 config_network_wan: OpnFiInformNetworkConfig::DHCP,
                 config_network_wan2: OpnFiInformNetworkConfig::default(),
+                config_port_table: vec![
+                    OpnFiInformConfigPortTableItem::new("wan".to_string(), "wlp3s0".to_string()),
+                    OpnFiInformConfigPortTableItem::new("lan".to_string(), "virbr1".to_string()),
+                ],
                 default: config.is_none(),
                 discovery_response: false,
                 fw_caps: std::i32::MAX,
-                has_default_route_distance: false,
-                has_dnsmasq_hostfile_update: false,
-                has_dpi: false,
                 has_eth1: true,
-                has_porta: false,
                 has_ssh_disable: true,
-                has_vti: false,
                 hostname: "fake-dev.local".to_string(),
                 inform_url: inform_url.clone(),
-                ip: "1.2.3.4".to_string(),
-                isolated: false,
-                locating: false,
-                mac: "00:de:ad:be:ef:00".to_string(),
+                if_table: vec![wan_interface.clone(), lan_interface.clone()],
+                ip: wan_interface.ip,
+                mac: wan_interface.mac,
                 model: "UGWXG".to_string(),
                 model_display: "Netgate SG-4860".to_string(),
                 // model_display: "UniFi Security Gateway XG-8".to_string(),
-                netmask: "255.255.255.0".to_string(),
+                netmask: wan_interface.netmask,
                 radius_caps: 0,
-                required_version: "0.0.0".to_string(),
+                required_version: "0.0.1".to_string(),
                 selfrun_beacon: true,
                 serial: "00DEADBEEF00".to_string(),
                 state: 1,
@@ -181,19 +181,19 @@ fn main() -> Result {
                     mem_usage.to_string(),
                 ),
                 time: uptime as usize,
-                uplink: "eth0".to_string(),
+                uplink: "wlp3s0".to_string(),
                 uptime: uptime as usize,
                 version: "2.4.4-RELEASE-p3".to_string(),
+                ..OpnFiInformGatewayPayload::default()
             });
-            if false {
+            if true {
                 match serde_json::to_string_pretty(&payload) {
                     Ok(json) => info!("{}", json),
                     Err(e) => warn!("{}", e),
                 }
             }
-            let mac = mac_address::MacAddress::from_str("00:de:ad:be:ef:00")?;
             let inform_packet =
-                libOpnFi::inform::OpnfiInformPacket::new(None, 0, mac, flags, 1, payload);
+                lib_opnfi::inform::OpnfiInformPacket::new(None, 0, wan.mac(), flags, 1, payload);
 
             // Write Inform packet to a buffer
             let mut inform_data = Vec::new();
@@ -217,7 +217,7 @@ fn main() -> Result {
                             let mut inform_response_body = Vec::new();
                             inform_response.copy_to(&mut inform_response_body)?;
                             let mut inform_response_body = io::Cursor::new(inform_response_body);
-                            let packet: io::Result<OpnfiInformPacket<OpnFiInformPayload>> =
+                            let packet: lib_opnfi::Result<OpnfiInformPacket<OpnFiInformPayload>> =
                                 OpnfiInformPacket::read::<byteorder::NetworkEndian>(
                                     key,
                                     None,
@@ -256,7 +256,7 @@ fn main() -> Result {
                                             config = None;
                                             send_inform = true;
                                         }
-                                        _ => warn!("Unhandled Command"),
+                                        cmd => warn!("Unhandled Command: {:?}", cmd),
                                     },
                                     payload => warn!("Unhandled: {:?}", payload),
                                 }
@@ -264,15 +264,18 @@ fn main() -> Result {
                         }
                     }
                 } else if config.is_none() {
-                    info!("Device is pending adoption")
+                    info!("Device is pending adoption");
+                    infom_interval = 10;
                 } else {
                     warn!(
                         "Controller response status code: {}",
                         inform_response.status()
                     );
+                    infom_interval = 10;
                 }
             } else {
-                warn!("Unable to send inform packet.")
+                warn!("Unable to send inform packet.");
+                infom_interval = 10;
             }
         }
 
