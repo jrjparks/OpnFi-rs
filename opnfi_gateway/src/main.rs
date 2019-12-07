@@ -13,6 +13,7 @@ use lib_opnfi::inform::payload::net::{
 use lib_opnfi::inform::payload::stats::OpnFiInformSystemStatus;
 use lib_opnfi::inform::payload::{command::OpnFiInformPayloadCommand, OpnFiInformPayload};
 use lib_opnfi::inform::{OpnFiReadExt, OpnFiWriteExt, OpnfiInformPacket, OpnfiInformPacketFlag};
+use pnet::util::MacAddr;
 use rand::prelude::*;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -55,6 +56,24 @@ fn main() -> Result {
                 .help("Sets a config file path to use")
                 .takes_value(true),
         )
+        .arg(
+            clap::Arg::with_name("wan")
+                .short("w")
+                .long("wan")
+                .value_name("NIC")
+                .help("Set the nic to report for WAN")
+                .takes_value(true)
+                .default_value("eth0"),
+        )
+        .arg(
+            clap::Arg::with_name("lan")
+                .short("l")
+                .long("lan")
+                .value_name("NIC")
+                .help("Set the nic to report for LAN")
+                .takes_value(true)
+                .default_value("eth1"),
+        )
         .get_matches();
 
     let config_path = String::from(matches.value_of("config").unwrap_or("./config/opnfi.toml"));
@@ -76,7 +95,21 @@ fn main() -> Result {
     };
     info!("Reporting inform packets to {}", inform_url);
 
-    let mut net_devices = net::device::UnixNetworkDevice::list_devices()?;
+    info!("Reporting inform packets to {}", inform_url);
+    let mut wan_device = match matches.value_of("wan") {
+        Some(wan_name) => {
+            info!("Using {} as WAN device.", wan_name);
+            net::device::UnixNetworkDevice::new(&wan_name.to_string()).ok()
+        }
+        None => None,
+    };
+    let mut lan_device = match matches.value_of("lan") {
+        Some(lan_name) => {
+            info!("Using {} as LAN device.", lan_name);
+            net::device::UnixNetworkDevice::new(&lan_name.to_string()).ok()
+        }
+        None => None,
+    };
 
     let mut sysinf = sysinfo::System::new();
     let http_client = reqwest::Client::new();
@@ -98,9 +131,11 @@ fn main() -> Result {
         if now.duration_since(last_inform).as_secs() >= infom_interval {
             send_inform = true;
             sysinf.refresh_all();
-            for net_dev in &mut net_devices {
-                net_dev.refresh()?;
-                // info!("Refreshed network device: {:?}", net_dev);
+            if let Some(wan) = &mut wan_device {
+                wan.refresh()?;
+            }
+            if let Some(lan) = &mut lan_device {
+                lan.refresh()?;
             }
         }
 
@@ -138,15 +173,37 @@ fn main() -> Result {
             rng.fill_bytes(&mut initialization_vector);
 
             // Interfaces
-            let wan = net::device::UnixNetworkDevice::new(&String::from("wlp3s0"))?;
-            let wan_interface: OpnFiInformNetworkInterface = wan.clone().into();
+            let wan_interface: Option<OpnFiInformNetworkInterface> = match &mut wan_device.as_ref()
+            {
+                Some(wan) => Some(wan.clone().into()),
+                _ => None,
+            };
+            let lan_interface: Option<OpnFiInformNetworkInterface> = match &mut lan_device.as_ref()
+            {
+                Some(lan) => Some(lan.clone().into()),
+                _ => None,
+            };
+            let mut if_table = Vec::new();
+            if let Some(wan) = &wan_interface {
+                if_table.push(wan.clone());
+            }
+            if let Some(lan) = &lan_interface {
+                if_table.push(lan.clone());
+            }
 
-            let lan = net::device::UnixNetworkDevice::new(&String::from("virbr1"))?;
-            let lan_interface: OpnFiInformNetworkInterface = lan.clone().into();
+            let (ip, netmask) = match &wan_interface {
+                Some(wan_if) => (wan_if.ip.clone(), wan_if.netmask.clone()),
+                None => (String::from("1.2.3.4"), String::from("255.255.255.0")),
+            };
+            let mac = match &wan_device {
+                Some(wan_if) => wan_if.mac(),
+                None => MacAddr::zero(),
+            };
+            let serial = mac.to_string().replace(":", "");
 
             // Payload
             let payload = OpnFiInformPayload::Gateway(OpnFiInformGatewayPayload {
-                bootrom_version: "pfsense".to_string(),
+                bootrom_version: "unknown".to_string(),
                 cfgversion: match &config {
                     Some(config) => config.cfgversion.clone(),
                     _ => "0123456789abcdef".to_string(),
@@ -154,8 +211,14 @@ fn main() -> Result {
                 config_network_wan: OpnFiInformNetworkConfig::DHCP,
                 config_network_wan2: OpnFiInformNetworkConfig::default(),
                 config_port_table: vec![
-                    OpnFiInformConfigPortTableItem::new("wan".to_string(), "wlp3s0".to_string()),
-                    OpnFiInformConfigPortTableItem::new("lan".to_string(), "virbr1".to_string()),
+                    OpnFiInformConfigPortTableItem::new(
+                        "WAN".to_string(),
+                        wan_device.as_ref().unwrap().name(),
+                    ),
+                    OpnFiInformConfigPortTableItem::new(
+                        "LAN".to_string(),
+                        lan_device.as_ref().unwrap().name(),
+                    ),
                 ],
                 default: config.is_none(),
                 discovery_response: false,
@@ -164,17 +227,16 @@ fn main() -> Result {
                 has_ssh_disable: true,
                 hostname: "fake-dev.local".to_string(),
                 inform_url: inform_url.clone(),
-                if_table: vec![wan_interface.clone(), lan_interface.clone()],
-                ip: wan_interface.ip,
-                mac: wan_interface.mac,
+                if_table,
+                ip,
+                mac: mac.to_string(),
                 model: "UGWXG".to_string(),
-                model_display: "Netgate SG-4860".to_string(),
-                // model_display: "UniFi Security Gateway XG-8".to_string(),
-                netmask: wan_interface.netmask,
+                model_display: "UniFi Security Gateway XG-8".to_string(),
+                netmask,
                 radius_caps: 0,
                 required_version: "0.0.1".to_string(),
                 selfrun_beacon: true,
-                serial: "00DEADBEEF00".to_string(),
+                serial,
                 state: 1,
                 system_status: OpnFiInformSystemStatus::new(
                     cpu_usage.to_string(),
@@ -193,7 +255,7 @@ fn main() -> Result {
                 }
             }
             let inform_packet =
-                lib_opnfi::inform::OpnfiInformPacket::new(None, 0, wan.mac(), flags, 1, payload);
+                lib_opnfi::inform::OpnfiInformPacket::new(None, 0, mac, flags, 1, payload);
 
             // Write Inform packet to a buffer
             let mut inform_data = Vec::new();

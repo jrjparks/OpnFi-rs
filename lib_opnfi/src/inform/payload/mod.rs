@@ -6,7 +6,6 @@ use crate::{
     },
     Result,
 };
-use serde::{self, Deserialize, Serialize};
 use serde_json;
 
 pub mod command;

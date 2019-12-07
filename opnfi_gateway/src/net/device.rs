@@ -2,6 +2,7 @@ use pnet::{
     datalink::{interfaces, NetworkInterface},
     util::MacAddr,
 };
+use std::ffi::OsString;
 use std::str::FromStr;
 use std::{fs, io, path};
 
@@ -61,7 +62,7 @@ impl UnixNetworkDevice {
         let device_names = fs::read_dir("/sys/class/net")?
             .filter(|dn| dn.is_ok())
             .map(|dn| dn.unwrap())
-            .filter(|dn| dn.path().is_dir())
+            .filter(|dn| dn.path().is_dir() && dn.file_name() != OsString::from("lo"))
             .map(|dn| String::from(dn.file_name().to_str().unwrap()))
             .map(|dn| Self::new(&dn))
             .filter(|d| d.is_ok())

@@ -1,5 +1,3 @@
-use serde::{self, Deserialize, Serialize};
-
 // ===== Network Config =====
 
 /// Network config

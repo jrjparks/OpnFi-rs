@@ -2,9 +2,14 @@
 name = "lib_opnfi"
 version = "0.0.1"
 authors = ["James Parks <jrjparks@zathera.com>"]
+description = "Open source rust library to interface with Ubiquiti's family of Unifi SDN devices."
 edition = "2018"
 license = "Apache-2.0"
 license-file = "../LICENSE"
+readme = "README.md"
+repository = "https://github.com/jrjparks/OpnFi-rs"
+
+keywords = ["unifi", "ubiquiti"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
