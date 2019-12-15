@@ -1,5 +1,6 @@
 [workspace]
 
 members = [
-    "libOpnFi"
+    "lib_opnfi",
+    "opnfi_gateway"
 ]
