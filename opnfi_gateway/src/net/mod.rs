@@ -2,6 +2,7 @@ use crate::net::device::UnixNetworkDevice;
 use lib_opnfi::inform::payload::net::OpnFiInformNetworkInterface;
 
 pub(crate) mod device;
+pub(crate) mod nameservers;
 
 impl From<device::UnixNetworkDevice> for OpnFiInformNetworkInterface {
     fn from(value: UnixNetworkDevice) -> Self {

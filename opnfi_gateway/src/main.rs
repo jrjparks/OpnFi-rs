@@ -1,10 +1,14 @@
 #[macro_use]
 extern crate log;
-extern crate simple_logger;
-
+#[macro_use]
+extern crate lazy_static;
 extern crate clap;
 extern crate lib_opnfi;
+extern crate regex;
+extern crate simple_logger;
+
 use crate::config::Config;
+use crate::net::nameservers::get_nameservers;
 use crate::util::*;
 use lib_opnfi::inform::payload::gateway::OpnFiInformGatewayPayload;
 use lib_opnfi::inform::payload::net::{
@@ -185,10 +189,17 @@ fn main() -> Result {
             };
             let mut if_table = Vec::new();
             if let Some(wan) = &wan_interface {
-                if_table.push(wan.clone());
+                let mut w = wan.clone();
+                for ns in get_nameservers()?.iter() {
+                    w.nameservers.push(ns.to_string());
+                }
+                w.name = String::from("eth0");
+                if_table.push(w);
             }
             if let Some(lan) = &lan_interface {
-                if_table.push(lan.clone());
+                let mut l = lan.clone();
+                l.name = String::from("eth1");
+                if_table.push(l);
             }
 
             let (ip, netmask) = match &wan_interface {
@@ -243,7 +254,7 @@ fn main() -> Result {
                     mem_usage.to_string(),
                 ),
                 time: uptime as usize,
-                uplink: "wlp3s0".to_string(),
+                uplink: "eth0".to_string(),
                 uptime: uptime as usize,
                 version: "2.4.4-RELEASE-p3".to_string(),
                 ..OpnFiInformGatewayPayload::default()

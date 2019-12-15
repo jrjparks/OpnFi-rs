@@ -2,5 +2,5 @@
 
 members = [
     "lib_opnfi",
-    "opnfi_device"
+    "opnfi_gateway"
 ]
